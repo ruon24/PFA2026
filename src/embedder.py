@@ -4,7 +4,6 @@ Embedding Generator - Create embeddings for text chunks
 
 from sentence_transformers import SentenceTransformer
 from typing import List
-import numpy as np
 
 
 class EmbeddingGenerator:
@@ -20,17 +19,18 @@ class EmbeddingGenerator:
         self.model_name = model_name
         self.model = SentenceTransformer(model_name)
     
-    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def generate_embeddings(self, texts: List[str], show_progress_bar: bool = False) -> List[List[float]]:
         """
         Generate embeddings for a list of texts
-        
+
         Args:
             texts: List of text strings
-            
+            show_progress_bar: Whether to display the sentence-transformers progress bar
+
         Returns:
             List of embedding vectors
         """
-        embeddings = self.model.encode(texts, show_progress_bar=True)
+        embeddings = self.model.encode(texts, show_progress_bar=show_progress_bar)
         return embeddings.tolist()
     
     def generate_embedding(self, text: str) -> List[float]:

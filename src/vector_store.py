@@ -42,8 +42,11 @@ class VectorStore:
         metadatas: Optional[List[Dict]] = None
     ):
         """
-        Add documents to the vector store
-        
+        Add or update documents in the vector store (idempotent).
+
+        Existing ids are overwritten rather than raising — re-running ingestion
+        on the same corpus is safe.
+
         Args:
             ids: Unique identifiers for documents
             documents: Text documents
@@ -53,7 +56,7 @@ class VectorStore:
         if metadatas is None:
             metadatas = [{}] * len(documents)
         
-        self.collection.add(
+        self.collection.upsert(
             ids=ids,
             documents=documents,
             embeddings=embeddings,

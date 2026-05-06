@@ -3,9 +3,8 @@ Main Pipeline - Orchestrates the complete RAG pipeline
 """
 
 import os
-import glob
-from typing import List, Dict, Optional
-import time
+from pathlib import Path
+from typing import Dict
 
 from src.pdf_parser import PDFParser
 from src.chunker import TextChunker
@@ -57,8 +56,11 @@ class Pipeline:
         Returns:
             Dictionary with ingestion statistics
         """
-        pdf_files = glob.glob(os.path.join(pdf_folder, "*.pdf"))
-        
+        root = Path(pdf_folder)
+        pdf_files = sorted(
+            {str(p) for p in root.rglob("*.pdf")} | {str(p) for p in root.rglob("*.PDF")}
+        )
+
         if not pdf_files:
             return {"status": "no_files", "message": f"No PDF files found in {pdf_folder}"}
         
@@ -75,19 +77,24 @@ class Pipeline:
             try:
                 # Extract text from PDF
                 text = self.pdf_parser.extract_text(pdf_path)
-                
+
+                if not text.strip():
+                    if verbose:
+                        print("  Skipping (no extractable text — likely scanned/image-only)")
+                    continue
+
                 if verbose:
                     print(f"  Extracted {len(text)} characters")
-                
+
                 # Chunk text
                 chunks = self.chunker.chunk_text(text)
                 stats["total_chunks"] += len(chunks)
-                
+
                 if verbose:
                     print(f"  Created {len(chunks)} chunks")
-                
+
                 # Generate embeddings
-                embeddings = self.embedder.generate_embeddings(chunks)
+                embeddings = self.embedder.generate_embeddings(chunks, show_progress_bar=verbose)
                 
                 if verbose:
                     print(f"  Generated {len(embeddings)} embeddings")
@@ -178,9 +185,13 @@ class Pipeline:
         }
     
     def reset(self):
-        """Reset the pipeline by deleting the collection"""
-        self.vector_store.delete_collection()
-        print(f"Collection '{self.collection_name}' deleted. Reinitializing...")
+        """Reset the pipeline by deleting the collection (no-op if absent)."""
+        try:
+            self.vector_store.delete_collection()
+            print(f"Collection '{self.collection_name}' deleted. Reinitializing...")
+        except (ValueError, Exception) as e:
+            # ChromaDB raises ValueError if the collection does not exist; tolerate that.
+            print(f"Collection '{self.collection_name}' not present (skipping delete): {e}")
         self.vector_store = VectorStore(collection_name=self.collection_name)
 
 
