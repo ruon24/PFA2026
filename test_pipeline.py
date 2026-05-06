@@ -1,52 +1,51 @@
 """
-Test script to verify the RAG pipeline components
+Smoke tests for the RAG pipeline components.
+
+These exercise the modular `src/*` modules used by `main.py`. They do NOT
+require a running Ollama daemon — `QueryEngine` is only constructed, not
+queried. End-to-end ingestion + query is covered by running `python main.py`.
 """
 
-from rag_pipeline import PDFProcessor, TextChunker, EmbeddingGenerator, VectorStore, OllamaClient
+from src.pdf_parser import PDFParser
+from src.chunker import TextChunker
+from src.embedder import EmbeddingGenerator
+from src.vector_store import VectorStore
+from src.query_engine import QueryEngine
 
-def test_components():
-    print("Testing RAG Pipeline Components...\n")
-    
-    # Test 1: PDF Processor
-    print("1. PDF Processor - OK (imported successfully)")
-    
-    # Test 2: Text Chunking
-    print("2. Testing Text Chunking...")
+
+def test_pdf_parser_constructs():
+    PDFParser()
+
+
+def test_chunker_produces_chunks():
     chunker = TextChunker(chunk_size=100, overlap=20)
-    test_text = "This is a test sentence. " * 20
-    chunks = chunker.chunk_text(test_text)
-    print(f"   Created {len(chunks)} chunks from test text")
-    
-    # Test 3: Embedding Generator
-    print("3. Testing Embedding Generator...")
+    chunks = chunker.chunk_text("This is a test sentence. " * 20)
+    assert len(chunks) > 0
+    assert all(isinstance(c, str) for c in chunks)
+
+
+def test_embedder_generates_correct_shape():
     embedder = EmbeddingGenerator()
-    test_embeddings = embedder.generate_embeddings(["Hello world", "Test sentence"])
-    print(f"   Generated embeddings: shape {len(test_embeddings)} vectors")
-    
-    # Test 4: Vector Store
-    print("4. Testing ChromaDB Vector Store...")
-    store = VectorStore("test_collection")
-    # Add test documents
-    store.add_documents(
-        ids=["test1", "test2"],
-        documents=["Document 1 content", "Document 2 content"],
-        embeddings=test_embeddings,
-        metadatas=[{"source": "test"}, {"source": "test"}]
+    embs = embedder.generate_embeddings(["Hello world", "Test sentence"])
+    assert len(embs) == 2
+    assert len(embs[0]) == embedder.get_embedding_dimension()
+
+
+def test_vector_store_roundtrip(tmp_path):
+    store = VectorStore(
+        collection_name="pytest_smoke",
+        persist_directory=str(tmp_path),
     )
-    print("   Added test documents to ChromaDB")
-    
-    # Test 5: Ollama
-    print("5. Testing Ollama Client...")
-    client = OllamaClient()
-    print("   Ollama client initialized")
-    
-    print("\n✓ All components working!")
-    print("\nTo use the pipeline:")
-    print("1. Place PDF files in a 'pdfs' folder")
-    print("2. Run: python rag_pipeline.py")
-    print("3. Uncomment the ingest_pdfs() and query() calls")
-    print("4. Make sure Ollama is running: ollama serve")
+    embedder = EmbeddingGenerator()
+    embs = embedder.generate_embeddings(["doc one", "doc two"])
+    store.add_documents(
+        ids=["a", "b"],
+        documents=["doc one", "doc two"],
+        embeddings=embs,
+        metadatas=[{"src": "t"}, {"src": "t"}],
+    )
+    assert store.get_collection_info()["count"] == 2
 
 
-if __name__ == "__main__":
-    test_components()
+def test_query_engine_constructs():
+    QueryEngine()
