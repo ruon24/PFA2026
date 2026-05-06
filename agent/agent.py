@@ -30,8 +30,11 @@ from livekit.plugins import google
 from agent.kb import KnowledgeBase
 from agent.prompts import DERJA_TUTOR_INSTRUCTIONS
 
-# Load .env.local from the agent/ directory (next to this file)
-load_dotenv(Path(__file__).resolve().parent / ".env.local")
+# Load env from the agent/ directory (next to this file).
+# Tries .env.local first, falls back to .env. Both are gitignored.
+_AGENT_DIR = Path(__file__).resolve().parent
+load_dotenv(_AGENT_DIR / ".env.local")
+load_dotenv(_AGENT_DIR / ".env")
 
 logger = logging.getLogger("derja-tutor")
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
