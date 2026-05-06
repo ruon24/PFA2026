@@ -1,9 +1,11 @@
-"""Retrieval-only bridge to the PFA2026 ChromaDB collection.
+"""Retrieval-only bridge to the Dockerized ChromaDB collection.
 
 The voice agent uses Gemini Live as the LLM, so we deliberately bypass
 src/query_engine.py (Ollama) and only expose vector search + a small
 catalog helper. One KnowledgeBase instance is created per worker process;
 the SentenceTransformer embedder loads its weights once at startup.
+
+Connects to ChromaDB over HTTP — see agent/chroma_client.py.
 """
 
 from __future__ import annotations
@@ -11,21 +13,18 @@ from __future__ import annotations
 from typing import Any
 
 from src.embedder import EmbeddingGenerator
-from src.vector_store import VectorStore
+
+from agent.chroma_client import get_collection
 
 
 class KnowledgeBase:
     def __init__(
         self,
-        persist_directory: str = "./chroma_db",
         collection_name: str = "pdf_rag",
         embedding_model: str = "all-MiniLM-L6-v2",
     ):
         self.embedder = EmbeddingGenerator(model_name=embedding_model)
-        self.store = VectorStore(
-            collection_name=collection_name,
-            persist_directory=persist_directory,
-        )
+        self.collection = get_collection(collection_name)
 
     def search(self, query: str, top_k: int = 3) -> list[dict[str, Any]]:
         """Return up to top_k chunks most relevant to the query.
@@ -33,7 +32,7 @@ class KnowledgeBase:
         Each result is a dict with keys: text, source, grade, distance.
         """
         embedding = self.embedder.generate_embedding(query)
-        res = self.store.query(embedding, n_results=top_k)
+        res = self.collection.query(query_embeddings=[embedding], n_results=top_k)
 
         docs = (res.get("documents") or [[]])[0]
         metas = (res.get("metadatas") or [[]])[0]
@@ -58,7 +57,7 @@ class KnowledgeBase:
         Reads metadata for every chunk in the collection (cheap — metadata
         only) and returns {grade: [source_filename, ...], ...}.
         """
-        res = self.store.collection.get(include=["metadatas"])
+        res = self.collection.get(include=["metadatas"])
         by_grade: dict[str, set[str]] = {}
         for meta in res.get("metadatas") or []:
             if not meta:
@@ -70,10 +69,8 @@ class KnowledgeBase:
         return {grade: sorted(files) for grade, files in sorted(by_grade.items())}
 
     def stats(self) -> dict[str, Any]:
-        info = self.store.get_collection_info()
         return {
-            "collection": info["name"],
-            "document_count": info["count"],
-            "persist_directory": info["persist_directory"],
+            "collection": self.collection.name,
+            "document_count": self.collection.count(),
             "embedding_dim": self.embedder.get_embedding_dimension(),
         }

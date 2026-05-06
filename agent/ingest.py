@@ -1,15 +1,15 @@
-"""One-time ingestion: walk data/MANUELS/ recursively and build chroma_db.
+"""One-time ingestion: walk data/MANUELS/ recursively and populate ChromaDB.
 
-Why a separate script (vs Pipeline.ingest_pdfs):
-  - Pipeline.ingest_pdfs in src/pipeline.py is non-recursive but the corpus
-    lives under data/MANUELS/{4,5,6}/.
-  - We attach a `grade` metadata field (parent dir name) for filtering
-    and for the agent's `list_available_subjects` tool.
+Connects to a Dockerized ChromaDB over HTTP. Start the server first:
+    docker run -p 8000:8000 chromadb/chroma
 
-Run from the PFA2026/ directory:
+Then run from the PFA2026/ directory:
     uv run python -m agent.ingest
     # or with a custom corpus root:
     uv run python -m agent.ingest --pdfs ./data/MANUELS
+
+We attach a `grade` metadata field (parent dir name 4/5/6) for filtering
+and for the agent's `list_available_subjects` tool.
 """
 
 from __future__ import annotations
@@ -18,20 +18,24 @@ import argparse
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from src.chunker import TextChunker
 from src.embedder import EmbeddingGenerator
 from src.pdf_parser import PDFParser
-from src.vector_store import VectorStore
+
+# Load env BEFORE importing chroma_client so CHROMA_HOST/PORT are picked up.
+load_dotenv(Path(__file__).resolve().parent / ".env.local")
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+from agent.chroma_client import get_collection  # noqa: E402
 
 
-def ingest(pdf_root: Path, persist_directory: str, collection_name: str) -> int:
+def ingest(pdf_root: Path, collection_name: str) -> int:
     parser = PDFParser()
     chunker = TextChunker(chunk_size=500, overlap=50)
     embedder = EmbeddingGenerator(model_name="all-MiniLM-L6-v2")
-    store = VectorStore(
-        collection_name=collection_name,
-        persist_directory=persist_directory,
-    )
+    collection = get_collection(collection_name)
 
     pdfs = sorted(pdf_root.rglob("*.pdf"))
     if not pdfs:
@@ -69,23 +73,27 @@ def ingest(pdf_root: Path, persist_directory: str, collection_name: str) -> int:
             }
             for i in range(len(chunks))
         ]
-        store.add_documents(ids=ids, documents=chunks, embeddings=embeddings, metadatas=metadatas)
+        collection.upsert(
+            ids=ids,
+            documents=chunks,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
         total_chunks += len(chunks)
         print(f"  upserted {len(chunks)} chunks")
 
     print(f"\nDone: {len(pdfs)} files, {total_chunks} chunks")
-    print(f"Collection '{collection_name}' now has {store.collection.count()} documents")
+    print(f"Collection '{collection_name}' now has {collection.count()} documents")
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Recursively ingest PDFs into ChromaDB.")
     parser.add_argument("--pdfs", default="./data/MANUELS", help="Root folder for recursive PDF scan")
-    parser.add_argument("--db", default="./chroma_db", help="ChromaDB persist directory")
     parser.add_argument("--collection", default="pdf_rag", help="Collection name")
     args = parser.parse_args()
 
-    return ingest(Path(args.pdfs), args.db, args.collection)
+    return ingest(Path(args.pdfs), args.collection)
 
 
 if __name__ == "__main__":
