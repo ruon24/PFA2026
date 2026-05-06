@@ -1,6 +1,17 @@
 ﻿venv/
+.venv/
 __pycache__/
 *.pyc
 chroma_db/
 *.pyd
 *.dll
+
+# Secrets (keep .env.example committed)
+.env
+.env.local
+.env.*.local
+
+# Tooling state
+.omc/
+.claude/
+.DS_Store
