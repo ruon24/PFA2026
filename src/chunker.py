@@ -46,37 +46,6 @@ class TextChunker:
         
         return chunks
     
-    def chunk_text_by_sentences(self, text: str, max_chunk_size: int = 500) -> List[str]:
-        """
-        Split text into chunks by sentences, respecting chunk size
-        
-        Args:
-            text: Input text
-            max_chunk_size: Maximum tokens per chunk
-            
-        Returns:
-            List of text chunks
-        """
-        sentences = text.split('. ')
-        chunks = []
-        current_chunk = ""
-        
-        for sentence in sentences:
-            sentence = sentence.strip() + "." if sentence else ""
-            test_chunk = current_chunk + " " + sentence if current_chunk else sentence
-            
-            if len(self.enc.encode(test_chunk)) <= max_chunk_size:
-                current_chunk = test_chunk
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                current_chunk = sentence
-        
-        if current_chunk:
-            chunks.append(current_chunk)
-        
-        return chunks
-    
     def get_token_count(self, text: str) -> int:
         """Get the number of tokens in text"""
         return len(self.enc.encode(text))
