@@ -83,7 +83,7 @@ class DerjaTutor(Agent):
 server = AgentServer()
 
 
-@server.rtc_session()
+@server.rtc_session(agent_name="derja-tutor")
 async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         llm=google.realtime.RealtimeModel(
