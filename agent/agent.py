@@ -39,9 +39,7 @@ load_dotenv(_AGENT_DIR / ".env")
 logger = logging.getLogger("derja-tutor")
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
-# Resolve chroma_db relative to PFA2026/ so the worker is cwd-independent.
-PFA_ROOT = Path(__file__).resolve().parent.parent
-KB = KnowledgeBase(persist_directory=str(PFA_ROOT / "chroma_db"))
+KB = KnowledgeBase()
 logger.info("KnowledgeBase ready: %s", KB.stats())
 
 
